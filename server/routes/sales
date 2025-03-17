@@ -1,0 +1,567 @@
+const express = require('express');
+const router = express.Router();
+const { check, validationResult } = require('express-validator');
+const auth = require('../middleware/auth');
+const roleAuth = require('../middleware/roleAuth');
+const Sale = require('../models/Sale');
+const Product = require('../models/Product');
+const Customer = require('../models/Customer');
+const InventoryMovement = require('../models/InventoryMovement');
+
+// @route   GET api/sales
+// @desc    Get sales with filters
+// @access  Private
+router.get('/', auth, async (req, res) => {
+  try {
+    // Build query
+    const query = {};
+    
+    // Date range filter
+    if (req.query.startDate && req.query.endDate) {
+      query.createdAt = {
+        $gte: new Date(req.query.startDate),
+        $lte: new Date(req.query.endDate)
+      };
+    } else if (req.query.startDate) {
+      query.createdAt = { $gte: new Date(req.query.startDate) };
+    } else if (req.query.endDate) {
+      query.createdAt = { $lte: new Date(req.query.endDate) };
+    }
+    
+    // Status filter
+    if (req.query.status) {
+      query.status = req.query.status;
+    }
+    
+    // Cashier filter
+    if (req.query.cashier) {
+      query.cashier = req.query.cashier;
+    }
+    
+    // Sale number search
+    if (req.query.saleNumber) {
+      query.saleNumber = new RegExp(req.query.saleNumber, 'i');
+    }
+    
+    // Customer filter
+    if (req.query.customer) {
+      query.customer = req.query.customer;
+    }
+    
+    // Minimum amount filter
+    if (req.query.minAmount) {
+      query.total = { $gte: parseFloat(req.query.minAmount) };
+    }
+    
+    // Maximum amount filter
+    if (req.query.maxAmount) {
+      query.total = { 
+        ...query.total || {},
+        $lte: parseFloat(req.query.maxAmount) 
+      };
+    }
+    
+    // Product filter (find sales containing specific product)
+    if (req.query.product) {
+      query['items.product'] = req.query.product;
+    }
+    
+    // Determine sort options
+    const sortField = req.query.sortBy || 'createdAt';
+    const sortOrder = req.query.sortOrder === 'asc' ? 1 : -1;
+    
+    // Pagination options
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 50;
+    const skip = (page - 1) * limit;
+    
+    // Find sales with optional population
+    let salesQuery = Sale.find(query);
+    
+    // Populate customer if requested
+    if (req.query.includeCustomer === 'true') {
+      salesQuery = salesQuery.populate('customer', 'name email');
+    }
+    
+    // Populate cashier if requested
+    if (req.query.includeCashier === 'true') {
+      salesQuery = salesQuery.populate('cashier', 'name');
+    }
+    
+    // Apply sort, skip, and limit
+    salesQuery = salesQuery
+      .sort({ [sortField]: sortOrder })
+      .skip(skip)
+      .limit(limit);
+    
+    // Execute query
+    const sales = await salesQuery;
+    
+    // Get total count for pagination
+    const totalCount = await Sale.countDocuments(query);
+    
+    // Return result
+    res.json({
+      sales,
+      pagination: {
+        totalItems: totalCount,
+        totalPages: Math.ceil(totalCount / limit),
+        currentPage: page,
+        pageSize: limit
+      }
+    });
+  } catch (err) {
+    console.error('Error fetching sales:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// @route   GET api/sales/:id
+// @desc    Get sale by ID
+// @access  Private
+router.get('/:id', auth, async (req, res) => {
+  try {
+    const sale = await Sale.findById(req.params.id)
+      .populate('customer', 'name email phone')
+      .populate('cashier', 'name');
+    
+    if (!sale) {
+      return res.status(404).json({ message: 'Sale not found' });
+    }
+    
+    res.json(sale);
+  } catch (err) {
+    console.error('Error fetching sale:', err);
+    
+    if (err.kind === 'ObjectId') {
+      return res.status(404).json({ message: 'Sale not found' });
+    }
+    
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// @route   POST api/sales
+// @desc    Create a new sale
+// @access  Private
+router.post(
+  '/',
+  [
+    auth,
+    [
+      check('items', 'Items are required').isArray({ min: 1 }),
+      check('items.*.product', 'Product ID is required for each item').not().isEmpty(),
+      check('items.*.quantity', 'Quantity is required for each item').isNumeric(),
+      check('items.*.pricePerUnit', 'Price is required for each item').isNumeric(),
+      check('subtotal', 'Subtotal is required').isNumeric(),
+      check('total', 'Total is required').isNumeric()
+    ]
+  ],
+  async (req, res) => {
+    // Validate request
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+    
+    try {
+      const {
+        items,
+        customer,
+        subtotal,
+        taxTotal,
+        discountTotal,
+        total,
+        amountTendered,
+        changeDue,
+        payments,
+        notes,
+        registerNumber
+      } = req.body;
+      
+      // Create new sale
+      const sale = new Sale({
+        items,
+        customer,
+        subtotal,
+        taxTotal,
+        discountTotal: discountTotal || 0,
+        total,
+        amountTendered,
+        changeDue,
+        payments,
+        notes,
+        cashier: req.user.id,
+        registerNumber: registerNumber || 'POS-1',
+        status: 'Completed'
+      });
+      
+      // Save the sale
+      await sale.save();
+      
+      // Update customer if provided
+      if (customer) {
+        const customerDoc = await Customer.findById(customer);
+        if (customerDoc) {
+          await customerDoc.updatePurchaseStats(sale);
+        }
+      }
+      
+      // Create inventory movements for each item
+      for (const item of items) {
+        const product = await Product.findById(item.product);
+        
+        if (!product) {
+          console.error(`Product not found: ${item.product}`);
+          continue;
+        }
+        
+        // Check if enough stock
+        if (product.currentStock < item.quantity) {
+          return res.status(400).json({ 
+            message: `Insufficient stock for ${product.name}. Available: ${product.currentStock}` 
+          });
+        }
+        
+        // Update product stock
+        const previousStock = product.currentStock;
+        product.currentStock -= item.quantity;
+        await product.save();
+        
+        // Create inventory movement
+        const movement = new InventoryMovement({
+          product: product._id,
+          barcode: product.barcode,
+          movementType: 'Sold',
+          quantity: item.quantity,
+          previousStock,
+          newStock: product.currentStock,
+          reference: sale.saleNumber,
+          performedBy: req.user.id
+        });
+        
+        await movement.save();
+      }
+      
+      res.status(201).json({
+        message: 'Sale created successfully',
+        sale
+      });
+    } catch (err) {
+      console.error('Error creating sale:', err);
+      res.status(500).json({ message: 'Server error' });
+    }
+  }
+);
+
+// @route   PUT api/sales/:id/void
+// @desc    Void a sale
+// @access  Private/Manager, Admin
+router.put(
+  '/:id/void',
+  [
+    auth,
+    roleAuth(['admin', 'manager']),
+    check('reason', 'Reason is required').not().isEmpty()
+  ],
+  async (req, res) => {
+    // Validate request
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+    
+    try {
+      const sale = await Sale.findById(req.params.id);
+      
+      if (!sale) {
+        return res.status(404).json({ message: 'Sale not found' });
+      }
+      
+      // Check if sale can be voided
+      if (sale.status === 'Voided') {
+        return res.status(400).json({ message: 'Sale is already voided' });
+      }
+      
+      if (sale.status === 'Refunded') {
+        return res.status(400).json({ message: 'Cannot void a refunded sale' });
+      }
+      
+      // Update sale status
+      sale.status = 'Voided';
+      sale.notes = `${sale.notes ? sale.notes + ' | ' : ''}VOIDED: ${req.body.reason}`;
+      
+      await sale.save();
+      
+      // Return inventory to stock
+      for (const item of sale.items) {
+        const product = await Product.findById(item.product);
+        
+        if (!product) {
+          console.error(`Product not found: ${item.product}`);
+          continue;
+        }
+        
+        // Update product stock
+        const previousStock = product.currentStock;
+        product.currentStock += item.quantity;
+        await product.save();
+        
+        // Create inventory movement
+        const movement = new InventoryMovement({
+          product: product._id,
+          barcode: item.barcode,
+          movementType: 'Returned',
+          quantity: item.quantity,
+          previousStock,
+          newStock: product.currentStock,
+          reference: `VOID-${sale.saleNumber}`,
+          notes: req.body.reason,
+          performedBy: req.user.id
+        });
+        
+        await movement.save();
+      }
+      
+      res.json({
+        message: 'Sale voided successfully',
+        sale
+      });
+    } catch (err) {
+      console.error('Error voiding sale:', err);
+      
+      if (err.kind === 'ObjectId') {
+        return res.status(404).json({ message: 'Sale not found' });
+      }
+      
+      res.status(500).json({ message: 'Server error' });
+    }
+  }
+);
+
+// @route   PUT api/sales/:id/refund
+// @desc    Process a refund for a sale
+// @access  Private/Manager, Admin
+router.put(
+  '/:id/refund',
+  [
+    auth,
+    roleAuth(['admin', 'manager']),
+    [
+      check('items', 'Items to refund are required').isArray({ min: 1 }),
+      check('items.*.product', 'Product ID is required for each item').not().isEmpty(),
+      check('items.*.quantity', 'Quantity is required for each item').isNumeric(),
+      check('reason', 'Reason is required').not().isEmpty()
+    ]
+  ],
+  async (req, res) => {
+    // Validate request
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+    
+    try {
+      const sale = await Sale.findById(req.params.id);
+      
+      if (!sale) {
+        return res.status(404).json({ message: 'Sale not found' });
+      }
+      
+      // Check if sale can be refunded
+      if (sale.status === 'Voided') {
+        return res.status(400).json({ message: 'Cannot refund a voided sale' });
+      }
+      
+      const { items, reason, paymentMethod } = req.body;
+      
+      // Validate refund items against original sale
+      let refundTotal = 0;
+      const refundedItems = [];
+      
+      for (const refundItem of items) {
+        // Find the corresponding item in the original sale
+        const originalItem = sale.items.find(
+          item => item.product.toString() === refundItem.product
+        );
+        
+        if (!originalItem) {
+          return res.status(400).json({ 
+            message: `Product ${refundItem.product} was not in the original sale` 
+          });
+        }
+        
+        // Check if refund quantity is valid
+        if (refundItem.quantity > originalItem.quantity) {
+          return res.status(400).json({ 
+            message: `Cannot refund more than original quantity for ${originalItem.name}` 
+          });
+        }
+        
+        // Calculate refund amount for this item
+        const itemRefundAmount = (originalItem.pricePerUnit * refundItem.quantity);
+        refundTotal += itemRefundAmount;
+        
+        // Add to refunded items
+        refundedItems.push({
+          product: originalItem.product,
+          barcode: originalItem.barcode,
+          name: originalItem.name,
+          quantity: refundItem.quantity,
+          pricePerUnit: originalItem.pricePerUnit,
+          taxRate: originalItem.taxRate,
+          refundAmount: itemRefundAmount
+        });
+      }
+      
+      // Calculate tax refund
+      const taxRefund = refundedItems.reduce((sum, item) => {
+        return sum + (item.refundAmount * (item.taxRate / 100));
+      }, 0);
+      
+      // Total refund with tax
+      const totalRefund = refundTotal + taxRefund;
+      
+      // Update sale record
+      sale.refunds = sale.refunds || [];
+      sale.refunds.push({
+        items: refundedItems,
+        total: totalRefund,
+        reason,
+        refundedBy: req.user.id,
+        refundDate: Date.now(),
+        paymentMethod: paymentMethod || 'Cash'
+      });
+      
+      // Update sale status
+      const allItemsRefunded = sale.items.every(originalItem => {
+        const refundItem = refundedItems.find(
+          r => r.product.toString() === originalItem.product.toString()
+        );
+        return refundItem && refundItem.quantity === originalItem.quantity;
+      });
+      
+      sale.status = allItemsRefunded ? 'Refunded' : 'Partially Refunded';
+      
+      await sale.save();
+      
+      // Process inventory returns
+      for (const item of refundedItems) {
+        const product = await Product.findById(item.product);
+        
+        if (!product) {
+          console.error(`Product not found: ${item.product}`);
+          continue;
+        }
+        
+        // Update product stock
+        const previousStock = product.currentStock;
+        product.currentStock += item.quantity;
+        await product.save();
+        
+        // Create inventory movement
+        const movement = new InventoryMovement({
+          product: product._id,
+          barcode: item.barcode,
+          movementType: 'Returned',
+          quantity: item.quantity,
+          previousStock,
+          newStock: product.currentStock,
+          reference: `REFUND-${sale.saleNumber}`,
+          notes: reason,
+          performedBy: req.user.id
+        });
+        
+        await movement.save();
+      }
+      
+      res.json({
+        message: 'Refund processed successfully',
+        sale,
+        refund: {
+          items: refundedItems,
+          subtotal: refundTotal,
+          tax: taxRefund,
+          total: totalRefund
+        }
+      });
+    } catch (err) {
+      console.error('Error processing refund:', err);
+      
+      if (err.kind === 'ObjectId') {
+        return res.status(404).json({ message: 'Sale not found' });
+      }
+      
+      res.status(500).json({ message: 'Server error' });
+    }
+  }
+);
+
+// @route   GET api/sales/receipt/:saleNumber
+// @desc    Get sale receipt by sale number
+// @access  Private
+router.get('/receipt/:saleNumber', auth, async (req, res) => {
+  try {
+    const sale = await Sale.findOne({ saleNumber: req.params.saleNumber })
+      .populate('customer', 'name email phone')
+      .populate('cashier', 'name');
+    
+    if (!sale) {
+      return res.status(404).json({ message: 'Sale not found' });
+    }
+    
+    // Mark receipt as printed
+    sale.receiptPrinted = true;
+    await sale.save();
+    
+    res.json(sale);
+  } catch (err) {
+    console.error('Error fetching receipt:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// @route   POST api/sales/email/:id
+// @desc    Email receipt to customer
+// @access  Private
+router.post('/email/:id', auth, async (req, res) => {
+  try {
+    const sale = await Sale.findById(req.params.id)
+      .populate('customer', 'name email');
+    
+    if (!sale) {
+      return res.status(404).json({ message: 'Sale not found' });
+    }
+    
+    // Check if customer email exists
+    const email = req.body.email || (sale.customer && sale.customer.email);
+    
+    if (!email) {
+      return res.status(400).json({ message: 'Customer email not provided' });
+    }
+    
+    // In a real application, you would integrate with an email service here
+    // This is a placeholder for that functionality
+    console.log(`Sending receipt for sale ${sale.saleNumber} to ${email}`);
+    
+    // Update sale record
+    sale.receiptEmail = email;
+    sale.receiptEmailSent = true;
+    await sale.save();
+    
+    res.json({
+      message: 'Receipt email sent successfully',
+      email
+    });
+  } catch (err) {
+    console.error('Error sending receipt email:', err);
+    
+    if (err.kind === 'ObjectId') {
+      return res.status(404).json({ message: 'Sale not found' });
+    }
+    
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+module.exports = router;
