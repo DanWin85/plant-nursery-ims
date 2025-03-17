@@ -5,7 +5,7 @@ node_modules/
 .env
 .env.local
 env.development
-env.example
+.env.example
 
 # logs
 logs
