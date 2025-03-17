@@ -1,0 +1,27 @@
+{
+  "name": "plant-nursery-ims",
+  "version": "1.0.0",
+  "description": "Inventory Management System for Plant Nursery",
+  "main": "server/server.js",
+  "scripts": {
+    "start": "node server/server.js",
+    "server": "nodemon server/server.js",
+    "client": "npm start --prefix client",
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "install-server": "npm install --prefix server",
+    "install-client": "npm install --prefix client",
+    "install-all": "npm install && npm run install-server && npm run install-client"
+  },
+  "keywords": [
+    "inventory",
+    "pos",
+    "plant",
+    "nursery",
+    "mern"
+  ],
+  "author": "Daniel Wingate",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
