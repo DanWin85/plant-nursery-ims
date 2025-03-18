@@ -84,7 +84,7 @@ const Dashboard = () => {
     };
     
     fetchDashboardData();
-  }, [setAlert, stats]);
+  }, [setAlert]);
   
   // Format currency
   const formatCurrency = (amount) => {
@@ -303,3 +303,5 @@ const Dashboard = () => {
     </div>
   );
 };
+
+export default Dashboard;

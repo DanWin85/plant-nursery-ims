@@ -1,178 +1,5 @@
 // routes/products.js
 const express = require('express');
-
-// @route   DELETE api/products/:id
-// @desc    Delete a product
-// @access  Private/Admin
-router.delete('/:id', [auth, roleAuth('admin')], async (req, res) => {
-  try {
-    const product = await Product.findById(req.params.id);
-    
-    if (!product) {
-      return res.status(404).json({ message: 'Product not found' });
-    }
-    
-    // Check if product has inventory
-    if (product.currentStock > 0) {
-      return res.status(400).json({ 
-        message: 'Cannot delete product with existing inventory. Deactivate it instead.' 
-      });
-    }
-    
-    // Remove product from supplier's product list if applicable
-    if (product.supplier) {
-      await Supplier.findByIdAndUpdate(
-        product.supplier,
-        { $pull: { productsSupplied: product._id } }
-      );
-    }
-    
-    // Delete product
-    await product.remove();
-    
-    res.json({ message: 'Product deleted successfully' });
-  } catch (err) {
-    console.error('Error deleting product:', err);
-    
-    if (err.kind === 'ObjectId') {
-      return res.status(404).json({ message: 'Product not found' });
-    }
-    
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-// @route   PUT api/products/:id/stock
-// @desc    Update product stock directly (admin override)
-// @access  Private/Admin
-router.put(
-  '/:id/stock',
-  [
-    auth,
-    roleAuth(['admin', 'manager']),
-    [
-      check('currentStock', 'Current stock is required').isNumeric()
-    ]
-  ],
-  async (req, res) => {
-    // Validate request
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
-    }
-    
-    try {
-      const product = await Product.findById(req.params.id);
-      
-      if (!product) {
-        return res.status(404).json({ message: 'Product not found' });
-      }
-      
-      const { currentStock, notes } = req.body;
-      const previousStock = product.currentStock;
-      
-      // Update stock
-      product.currentStock = currentStock;
-      await product.save();
-      
-      // Create inventory movement record
-      const InventoryMovement = require('../models/InventoryMovement');
-      const movement = new InventoryMovement({
-        product: product._id,
-        barcode: product.barcode,
-        movementType: 'Adjustment',
-        quantity: Math.abs(currentStock - previousStock),
-        previousStock,
-        newStock: currentStock,
-        notes: notes || 'Stock adjustment by administrator',
-        performedBy: req.user.id
-      });
-      
-      await movement.save();
-      
-      res.json({
-        message: 'Product stock updated successfully',
-        product,
-        movement
-      });
-    } catch (err) {
-      console.error('Error updating product stock:', err);
-      
-      if (err.kind === 'ObjectId') {
-        return res.status(404).json({ message: 'Product not found' });
-      }
-      
-      res.status(500).json({ message: 'Server error' });
-    }
-  }
-);
-
-// @route   GET api/products/stats/overview
-// @desc    Get product statistics and overview
-// @access  Private
-router.get('/stats/overview', auth, async (req, res) => {
-  try {
-    // Get total product count
-    const totalProducts = await Product.countDocuments();
-    
-    // Get active product count
-    const activeProducts = await Product.countDocuments({ isActive: true });
-    
-    // Get low stock count
-    const lowStockProducts = await Product.countDocuments({
-      $expr: { $lte: ['$currentStock', '$minimumStock'] },
-      isActive: true
-    });
-    
-    // Get out of stock count
-    const outOfStockProducts = await Product.countDocuments({
-      currentStock: 0,
-      isActive: true
-    });
-    
-    // Get product count by category
-    const categoryBreakdown = await Product.aggregate([
-      { $match: { isActive: true } },
-      { $group: { _id: '$category', count: { $sum: 1 } } },
-      { $sort: { count: -1 } }
-    ]);
-    
-    // Get total inventory value
-    const inventoryValue = await Product.aggregate([
-      { $match: { isActive: true } },
-      { 
-        $group: { 
-          _id: null, 
-          costValue: { $sum: { $multiply: ['$costPrice', '$currentStock'] } },
-          retailValue: { $sum: { $multiply: ['$sellingPrice', '$currentStock'] } }
-        } 
-      }
-    ]);
-    
-    res.json({
-      totalProducts,
-      activeProducts,
-      lowStockProducts,
-      outOfStockProducts,
-      categoryBreakdown: categoryBreakdown.map(cat => ({
-        category: cat._id,
-        count: cat.count
-      })),
-      inventoryValue: inventoryValue.length > 0 ? {
-        costValue: inventoryValue[0].costValue,
-        retailValue: inventoryValue[0].retailValue
-      } : {
-        costValue: 0,
-        retailValue: 0
-      }
-    });
-  } catch (err) {
-    console.error('Error fetching product statistics:', err);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-module.exports = router;
 const router = express.Router();
 const { check, validationResult } = require('express-validator');
 const auth = require('../middleware/auth');
@@ -509,3 +336,176 @@ router.put(
     }
   }
 );
+
+// @route   DELETE api/products/:id
+// @desc    Delete a product
+// @access  Private/Admin
+router.delete('/:id', [auth, roleAuth('admin')], async (req, res) => {
+  try {
+    const product = await Product.findById(req.params.id);
+    
+    if (!product) {
+      return res.status(404).json({ message: 'Product not found' });
+    }
+    
+    // Check if product has inventory
+    if (product.currentStock > 0) {
+      return res.status(400).json({ 
+        message: 'Cannot delete product with existing inventory. Deactivate it instead.' 
+      });
+    }
+    
+    // Remove product from supplier's product list if applicable
+    if (product.supplier) {
+      await Supplier.findByIdAndUpdate(
+        product.supplier,
+        { $pull: { productsSupplied: product._id } }
+      );
+    }
+    
+    // Delete product
+    await product.remove();
+    
+    res.json({ message: 'Product deleted successfully' });
+  } catch (err) {
+    console.error('Error deleting product:', err);
+    
+    if (err.kind === 'ObjectId') {
+      return res.status(404).json({ message: 'Product not found' });
+    }
+    
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// @route   PUT api/products/:id/stock
+// @desc    Update product stock directly (admin override)
+// @access  Private/Admin
+router.put(
+  '/:id/stock',
+  [
+    auth,
+    roleAuth(['admin', 'manager']),
+    [
+      check('currentStock', 'Current stock is required').isNumeric()
+    ]
+  ],
+  async (req, res) => {
+    // Validate request
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+    
+    try {
+      const product = await Product.findById(req.params.id);
+      
+      if (!product) {
+        return res.status(404).json({ message: 'Product not found' });
+      }
+      
+      const { currentStock, notes } = req.body;
+      const previousStock = product.currentStock;
+      
+      // Update stock
+      product.currentStock = currentStock;
+      await product.save();
+      
+      // Create inventory movement record
+      const InventoryMovement = require('../models/InventoryMovement');
+      const movement = new InventoryMovement({
+        product: product._id,
+        barcode: product.barcode,
+        movementType: 'Adjustment',
+        quantity: Math.abs(currentStock - previousStock),
+        previousStock,
+        newStock: currentStock,
+        notes: notes || 'Stock adjustment by administrator',
+        performedBy: req.user.id
+      });
+      
+      await movement.save();
+      
+      res.json({
+        message: 'Product stock updated successfully',
+        product,
+        movement
+      });
+    } catch (err) {
+      console.error('Error updating product stock:', err);
+      
+      if (err.kind === 'ObjectId') {
+        return res.status(404).json({ message: 'Product not found' });
+      }
+      
+      res.status(500).json({ message: 'Server error' });
+    }
+  }
+);
+
+// @route   GET api/products/stats/overview
+// @desc    Get product statistics and overview
+// @access  Private
+router.get('/stats/overview', auth, async (req, res) => {
+  try {
+    // Get total product count
+    const totalProducts = await Product.countDocuments();
+    
+    // Get active product count
+    const activeProducts = await Product.countDocuments({ isActive: true });
+    
+    // Get low stock count
+    const lowStockProducts = await Product.countDocuments({
+      $expr: { $lte: ['$currentStock', '$minimumStock'] },
+      isActive: true
+    });
+    
+    // Get out of stock count
+    const outOfStockProducts = await Product.countDocuments({
+      currentStock: 0,
+      isActive: true
+    });
+    
+    // Get product count by category
+    const categoryBreakdown = await Product.aggregate([
+      { $match: { isActive: true } },
+      { $group: { _id: '$category', count: { $sum: 1 } } },
+      { $sort: { count: -1 } }
+    ]);
+    
+    // Get total inventory value
+    const inventoryValue = await Product.aggregate([
+      { $match: { isActive: true } },
+      { 
+        $group: { 
+          _id: null, 
+          costValue: { $sum: { $multiply: ['$costPrice', '$currentStock'] } },
+          retailValue: { $sum: { $multiply: ['$sellingPrice', '$currentStock'] } }
+        } 
+      }
+    ]);
+    
+    res.json({
+      totalProducts,
+      activeProducts,
+      lowStockProducts,
+      outOfStockProducts,
+      categoryBreakdown: categoryBreakdown.map(cat => ({
+        category: cat._id,
+        count: cat.count
+      })),
+      inventoryValue: inventoryValue.length > 0 ? {
+        costValue: inventoryValue[0].costValue,
+        retailValue: inventoryValue[0].retailValue
+      } : {
+        costValue: 0,
+        retailValue: 0
+      }
+    });
+  } catch (err) {
+    console.error('Error fetching product statistics:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+module.exports = router;
