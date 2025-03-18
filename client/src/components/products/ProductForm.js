@@ -298,6 +298,247 @@ const ProductForm = () => {
                 <div className="card-body">
                   <div className="row mb-3">
                     <div className="col-md-6">
+                      <label htmlFor="name" className="form-label">Product Name <span className="text-danger">*</span></label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        id="name"
+                        name="name"
+                        value={formData.name}
+                        onChange={handleChange}
+                        required
+                      />
+                    </div>
+                    
+                    <div className="col-md-6">
+                      <label htmlFor="barcode" className="form-label">Barcode <span className="text-danger">*</span></label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        id="barcode"
+                        name="barcode"
+                        value={formData.barcode}
+                        onChange={handleChange}
+                        required
+                        disabled={isEditMode} // Don't allow barcode to be changed in edit mode
+                      />
+                      {!isEditMode && !formData.barcode && (
+                        <small className="text-muted">A barcode will be automatically generated when you select a category.</small>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div className="row mb-3">
+                    <div className="col-md-6">
+                      <label htmlFor="category" className="form-label">Category <span className="text-danger">*</span></label>
+                      <select
+                        className="form-select"
+                        id="category"
+                        name="category"
+                        value={formData.category}
+                        onChange={handleChange}
+                        required
+                      >
+                        <option value="">Select Category</option>
+                        {categories.map(category => (
+                          <option key={category} value={category}>
+                            {category}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    
+                    <div className="col-md-6">
+                      <label htmlFor="subcategory" className="form-label">Subcategory</label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        id="subcategory"
+                        name="subcategory"
+                        value={formData.subcategory}
+                        onChange={handleChange}
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="mb-3">
+                    <label htmlFor="description" className="form-label">Description</label>
+                    <textarea
+                      className="form-control"
+                      id="description"
+                      name="description"
+                      rows="3"
+                      value={formData.description}
+                      onChange={handleChange}
+                    ></textarea>
+                  </div>
+                  
+                  <div className="row mb-3">
+                    <div className="col-md-6">
+                      <label htmlFor="supplier" className="form-label">Supplier</label>
+                      <select
+                        className="form-select"
+                        id="supplier"
+                        name="supplier"
+                        value={formData.supplier}
+                        onChange={handleChange}
+                      >
+                        <option value="">Select Supplier</option>
+                        {suppliers.map(supplier => (
+                          <option key={supplier._id} value={supplier._id}>
+                            {supplier.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    
+                    <div className="col-md-6">
+                      <label htmlFor="location" className="form-label">Storage Location</label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        id="location"
+                        name="location"
+                        value={formData.location}
+                        onChange={handleChange}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="card mb-4">
+                <div className="card-header">
+                  <h5 className="mb-0">Pricing & Inventory</h5>
+                </div>
+                <div className="card-body">
+                  <div className="row mb-3">
+                    <div className="col-md-4">
+                      <label htmlFor="costPrice" className="form-label">Cost Price <span className="text-danger">*</span></label>
+                      <div className="input-group">
+                        <span className="input-group-text">$</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          className="form-control"
+                          id="costPrice"
+                          name="costPrice"
+                          value={formData.costPrice}
+                          onChange={handleChange}
+                          required
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="col-md-4">
+                      <label htmlFor="sellingPrice" className="form-label">Selling Price <span className="text-danger">*</span></label>
+                      <div className="input-group">
+                        <span className="input-group-text">$</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          className="form-control"
+                          id="sellingPrice"
+                          name="sellingPrice"
+                          value={formData.sellingPrice}
+                          onChange={handleChange}
+                          required
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="col-md-4">
+                      <label htmlFor="taxRate" className="form-label">Tax Rate</label>
+                      <div className="input-group">
+                        <input
+                          type="number"
+                          step="0.1"
+                          min="0"
+                          max="100"
+                          className="form-control"
+                          id="taxRate"
+                          name="taxRate"
+                          value={formData.taxRate}
+                          onChange={handleChange}
+                        />
+                        <span className="input-group-text">%</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="row mb-3">
+                    {!isEditMode && (
+                      <div className="col-md-4">
+                        <label htmlFor="currentStock" className="form-label">Initial Stock</label>
+                        <input
+                          type="number"
+                          step="1"
+                          min="0"
+                          className="form-control"
+                          id="currentStock"
+                          name="currentStock"
+                          value={formData.currentStock}
+                          onChange={handleChange}
+                        />
+                      </div>
+                    )}
+                    
+                    <div className={`col-md-${isEditMode ? '6' : '4'}`}>
+                      <label htmlFor="minimumStock" className="form-label">Minimum Stock</label>
+                      <input
+                        type="number"
+                        step="1"
+                        min="0"
+                        className="form-control"
+                        id="minimumStock"
+                        name="minimumStock"
+                        value={formData.minimumStock}
+                        onChange={handleChange}
+                      />
+                    </div>
+                    
+                    <div className={`col-md-${isEditMode ? '6' : '4'}`}>
+                      <label className="form-label d-block">Status</label>
+                      <div className="form-check form-switch">
+                        <input
+                          className="form-check-input"
+                          type="checkbox"
+                          id="isActive"
+                          name="isActive"
+                          checked={formData.isActive}
+                          onChange={handleChange}
+                        />
+                        <label className="form-check-label" htmlFor="isActive">
+                          Active
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="card mb-4">
+                <div className="card-header d-flex justify-content-between align-items-center">
+                  <h5 className="mb-0">Plant Details</h5>
+                  <span className="text-muted">Optional information specific to plants</span>
+                </div>
+                <div className="card-body">
+                  <div className="row mb-3">
+                    <div className="col-md-6">
+                      <label htmlFor="scientificName" className="form-label">Scientific Name</label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        id="scientificName"
+                        name="scientificName"
+                        value={formData.plantDetails.scientificName}
+                        onChange={handlePlantDetailsChange}
+                      />
+                    </div>
+                    
+                    <div className="col-md-6">
                       <label htmlFor="growthHabit" className="form-label">Growth Habit</label>
                       <input
                         type="text"
@@ -540,244 +781,4 @@ const ProductForm = () => {
   );
 };
 
-export default ProductForm;<label htmlFor="name" className="form-label">Product Name <span className="text-danger">*</span></label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        id="name"
-                        name="name"
-                        value={formData.name}
-                        onChange={handleChange}
-                        required
-                      />
-                    </div>
-                    
-                    <div className="col-md-6">
-                      <label htmlFor="barcode" className="form-label">Barcode <span className="text-danger">*</span></label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        id="barcode"
-                        name="barcode"
-                        value={formData.barcode}
-                        onChange={handleChange}
-                        required
-                        disabled={isEditMode} // Don't allow barcode to be changed in edit mode
-                      />
-                      {!isEditMode && !formData.barcode && (
-                        <small className="text-muted">A barcode will be automatically generated when you select a category.</small>
-                      )}
-                    </div>
-                  </div>
-                  
-                  <div className="row mb-3">
-                    <div className="col-md-6">
-                      <label htmlFor="category" className="form-label">Category <span className="text-danger">*</span></label>
-                      <select
-                        className="form-select"
-                        id="category"
-                        name="category"
-                        value={formData.category}
-                        onChange={handleChange}
-                        required
-                      >
-                        <option value="">Select Category</option>
-                        {categories.map(category => (
-                          <option key={category} value={category}>
-                            {category}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    
-                    <div className="col-md-6">
-                      <label htmlFor="subcategory" className="form-label">Subcategory</label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        id="subcategory"
-                        name="subcategory"
-                        value={formData.subcategory}
-                        onChange={handleChange}
-                      />
-                    </div>
-                  </div>
-                  
-                  <div className="mb-3">
-                    <label htmlFor="description" className="form-label">Description</label>
-                    <textarea
-                      className="form-control"
-                      id="description"
-                      name="description"
-                      rows="3"
-                      value={formData.description}
-                      onChange={handleChange}
-                    ></textarea>
-                  </div>
-                  
-                  <div className="row mb-3">
-                    <div className="col-md-6">
-                      <label htmlFor="supplier" className="form-label">Supplier</label>
-                      <select
-                        className="form-select"
-                        id="supplier"
-                        name="supplier"
-                        value={formData.supplier}
-                        onChange={handleChange}
-                      >
-                        <option value="">Select Supplier</option>
-                        {suppliers.map(supplier => (
-                          <option key={supplier._id} value={supplier._id}>
-                            {supplier.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    
-                    <div className="col-md-6">
-                      <label htmlFor="location" className="form-label">Storage Location</label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        id="location"
-                        name="location"
-                        value={formData.location}
-                        onChange={handleChange}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="card mb-4">
-                <div className="card-header">
-                  <h5 className="mb-0">Pricing & Inventory</h5>
-                </div>
-                <div className="card-body">
-                  <div className="row mb-3">
-                    <div className="col-md-4">
-                      <label htmlFor="costPrice" className="form-label">Cost Price <span className="text-danger">*</span></label>
-                      <div className="input-group">
-                        <span className="input-group-text">$</span>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          className="form-control"
-                          id="costPrice"
-                          name="costPrice"
-                          value={formData.costPrice}
-                          onChange={handleChange}
-                          required
-                        />
-                      </div>
-                    </div>
-                    
-                    <div className="col-md-4">
-                      <label htmlFor="sellingPrice" className="form-label">Selling Price <span className="text-danger">*</span></label>
-                      <div className="input-group">
-                        <span className="input-group-text">$</span>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          className="form-control"
-                          id="sellingPrice"
-                          name="sellingPrice"
-                          value={formData.sellingPrice}
-                          onChange={handleChange}
-                          required
-                        />
-                      </div>
-                    </div>
-                    
-                    <div className="col-md-4">
-                      <label htmlFor="taxRate" className="form-label">Tax Rate</label>
-                      <div className="input-group">
-                        <input
-                          type="number"
-                          step="0.1"
-                          min="0"
-                          max="100"
-                          className="form-control"
-                          id="taxRate"
-                          name="taxRate"
-                          value={formData.taxRate}
-                          onChange={handleChange}
-                        />
-                        <span className="input-group-text">%</span>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="row mb-3">
-                    {!isEditMode && (
-                      <div className="col-md-4">
-                        <label htmlFor="currentStock" className="form-label">Initial Stock</label>
-                        <input
-                          type="number"
-                          step="1"
-                          min="0"
-                          className="form-control"
-                          id="currentStock"
-                          name="currentStock"
-                          value={formData.currentStock}
-                          onChange={handleChange}
-                        />
-                      </div>
-                    )}
-                    
-                    <div className={`col-md-${isEditMode ? '6' : '4'}`}>
-                      <label htmlFor="minimumStock" className="form-label">Minimum Stock</label>
-                      <input
-                        type="number"
-                        step="1"
-                        min="0"
-                        className="form-control"
-                        id="minimumStock"
-                        name="minimumStock"
-                        value={formData.minimumStock}
-                        onChange={handleChange}
-                      />
-                    </div>
-                    
-                    <div className={`col-md-${isEditMode ? '6' : '4'}`}>
-                      <label className="form-label d-block">Status</label>
-                      <div className="form-check form-switch">
-                        <input
-                          className="form-check-input"
-                          type="checkbox"
-                          id="isActive"
-                          name="isActive"
-                          checked={formData.isActive}
-                          onChange={handleChange}
-                        />
-                        <label className="form-check-label" htmlFor="isActive">
-                          Active
-                        </label>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="card mb-4">
-                <div className="card-header d-flex justify-content-between align-items-center">
-                  <h5 className="mb-0">Plant Details</h5>
-                  <span className="text-muted">Optional information specific to plants</span>
-                </div>
-                <div className="card-body">
-                  <div className="row mb-3">
-                    <div className="col-md-6">
-                      <label htmlFor="scientificName" className="form-label">Scientific Name</label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        id="scientificName"
-                        name="scientificName"
-                        value={formData.plantDetails.scientificName}
-                        onChange={handlePlantDetailsChange}
-                      />
-                    </div>
-                    
-                    <div className="col-md-6">
+export default ProductForm;
