@@ -42,7 +42,8 @@ const getDateRange = (period) => {
 };
 
 // Daily sales report
-router.get('/sales/daily', auth, async (req, res) => {
+// Changed from /reports/sales/daily to /api/sales/daily
+router.get('/api/sales/daily', auth, async (req, res) => {
   try {
     // Get parameters
     const { date } = req.query;
@@ -134,7 +135,8 @@ router.get('/sales/daily', auth, async (req, res) => {
 });
 
 // Weekly, monthly, yearly sales reports
-router.get('/sales/:period', auth, async (req, res) => {
+// Changed from /reports/sales/:period to /api/sales/:period
+router.get('/api/sales/:period', auth, async (req, res) => {
   try {
     const { period } = req.params;
     const { startDate: customStartDate, endDate: customEndDate } = req.query;
@@ -249,7 +251,8 @@ router.get('/sales/:period', auth, async (req, res) => {
 });
 
 // Inventory movement report
-router.get('/inventory/movements', auth, async (req, res) => {
+// Changed from /reports/inventory/movements to /api/inventory/movements
+router.get('/api/inventory/movements', auth, async (req, res) => {
   try {
     const { startDate, endDate, productId, category, movementType } = req.query;
     
@@ -381,7 +384,8 @@ router.get('/inventory/movements', auth, async (req, res) => {
 });
 
 // Low stock report
-router.get('/inventory/low-stock', auth, async (req, res) => {
+// Changed from /reports/inventory/low-stock to /api/inventory/low-stock
+router.get('/api/inventory/low-stock', auth, async (req, res) => {
   try {
     const { threshold, category } = req.query;
     

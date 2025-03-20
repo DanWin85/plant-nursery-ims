@@ -7,7 +7,7 @@ import { CategorySelector } from './CategorySelector';
 import { ProductGrid } from './ProductGrid';
 import { CartItem } from './CartItem';
 import { PaymentModal } from './PaymentModal';
-import { ReceiptPrinter } from '../../utils/ReceiptPrinter';
+import ReceiptPrinter from '../../utils/ReceiptPrinter';
 
 const POSSystem = () => {
   // State management
