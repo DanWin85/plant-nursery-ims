@@ -11,6 +11,12 @@ app.use(cors());
 app.use(express.json());
 app.use(morgan('dev'));
 
+// Debug middleware to log all API requests
+app.use((req, res, next) => {
+  console.log(`${req.method} ${req.url}`);
+  next();
+});
+
 // Test route
 app.get('/api/test', (req, res) => {
   res.json({ message: 'Plant Nursery IMS API is running' });
@@ -29,7 +35,8 @@ app.use('/api/suppliers', require('./routes/suppliers'));
 // MongoDB Connection
 const connectDB = async () => {
   try {
-    const conn = await mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/plant-nursery-ims');
+    // Use your MongoDB Atlas connection string here
+    const conn = await mongoose.connect('mongodb+srv://danwingate85:h6XUkQydyLozpZL9@nursery-ims.0tsbp.mongodb.net/?retryWrites=true&w=majority&appName=Nursery-IMS');
     console.log(`MongoDB Connected: ${conn.connection.host}`);
   } catch (error) {
     console.error(`Error connecting to MongoDB: ${error.message}`);

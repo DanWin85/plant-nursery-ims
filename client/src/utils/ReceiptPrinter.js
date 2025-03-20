@@ -201,4 +201,8 @@ class ReceiptPrinter {
     }
   }
   
-  export const ReceiptPrinter = new ReceiptPrinter();
+  // Create a single instance of the ReceiptPrinter class
+  const receiptPrinterInstance = new ReceiptPrinter();
+  
+  // Export the instance
+  export default receiptPrinterInstance;
